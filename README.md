@@ -18,17 +18,68 @@ Requires [pytrends](https://pypi.org/project/pytrends/), installed automatically
 
 ```
 from longtrends import rescale_overlaps, get_overlapping_trends
-from datetime import datetime, timedelta
+from datetime import datetime
 
-google = get_overlapping_trends(
-                                keyword='google',
-                                start_date=datetime(2021, 1, 1),
-                                end_date=datetime(2021, 1, 31),
-                                days_delta=30)
+# Get overlapping trends
+olympics = get_overlapping_trends(
+                                keyword='olympics',
+                                start_date=datetime(2021, 7, 4),
+                                end_date=datetime(2021, 8, 29),
+                                days_delta=10)
 
-google_rescaled = rescale_overlaps(google)
-google_rescaled.plot()
+# Rescale overlaps
+olympics_rescaled = rescale_overlaps(olympics)
+
+# Optionally, plot the two sets of trends for comparison
+import matplotlib.pyplot as plt
+import pandas as pd
+
+def trends_plot(trends_list):
+
+    """
+    Args:
+        trends_list (list): list of Series of trends, with scores as columns and dates as index
+
+            each Series eg:
+
+                date
+                2016-04-10      44
+                2016-04-17      44
+                2016-04-24     100
+
+    Returns:
+        NoneType
+
+    """
+
+    # concat the trends together
+    df = pd.concat(trends_list, axis=1)
+
+    df.columns = [f'{df.columns[i]}_{i}' for i in range(df.shape[1])]
+    df.plot.line(figsize=(15, 4))
+    plt.ylabel('Score')
+    plt.title('Google Trends over different time periods')
+    plt.legend()
+    plt.show()
+
+# Plot overlapping trends
+trends_plot(olympics)
+
+# Plot rescaled trends
+trends_plot(olympics_rescaled)
 ```
+
+## Images
+
+Plot outputs from the above usage example:
+
+1. Trends for 'olympics', before rescaling between overlaps:
+
+![olympics_overlapping.png](/assets/images/olympics_overlapping.png)
+
+2. Trends after rescaling
+
+![olympics_rescaled.png](/assets/images/olympics_rescaled.png)
 
 ## Disclaimer
 
