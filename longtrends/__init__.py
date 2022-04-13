@@ -1,5 +1,6 @@
 from pytrends.request import TrendReq
 import pandas as pd
+from datetime import timedelta
 
 def get_trends(keyword, start_date, end_date):
 
