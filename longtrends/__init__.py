@@ -2,7 +2,7 @@ from pytrends.request import TrendReq
 import pandas as pd
 from datetime import timedelta
 
-def get_trends(keyword, start_date, end_date):
+def get_trends(keyword, start_date, end_date, verbose=False):
 
     """
     Args:
@@ -31,7 +31,9 @@ def get_trends(keyword, start_date, end_date):
     timeframe = f'{start_date.strftime("%Y-%m-%d")} {end_date.strftime("%Y-%m-%d")}'
     pytrend.build_payload([keyword], timeframe=timeframe)
 
-    print(f'Downloading trends for {keyword} between {start_date} and {end_date}')
+    if verbose == True:
+        print(f'Downloading {(end_date - start_date).days + 1} days of trends for {keyword} between {start_date} and {end_date}')
+
     trends_df = pytrend.interest_over_time()
 
     # keep only full periods of data, then drop isPartial column
@@ -46,7 +48,7 @@ def get_trends(keyword, start_date, end_date):
 
     return trends
 
-def get_overlapping_trends(keyword, start_date, end_date, days_delta):
+def get_overlapping_trends(keyword, start_date, end_date, days_delta=270, verbose=False):
 
     """
     Args:
@@ -103,6 +105,8 @@ def get_overlapping_trends(keyword, start_date, end_date, days_delta):
 
     Raises:
         ValueError: if days_delta is not even
+        ValueError: if days_delta > 270
+        ValueError: if start_date and end_date are not at least days_delta days apart
 
     Notes:
         - First, the function looks for the first days_delta/2 weeks of trend history
@@ -111,8 +115,14 @@ def get_overlapping_trends(keyword, start_date, end_date, days_delta):
 
     """
 
+    if days_delta > 270:
+        raise ValueError('days_delta must be <= 270')
+
     if days_delta % 2 != 0:
         raise ValueError('days_delta must be even')
+
+    if (end_date - start_date).days + 1 <= days_delta:
+        raise ValueError('start_date and end_date must be at least days_delta days apart. Use get_trends() to get short-term trends')
 
     trends_list = []
     start_dates = []
@@ -123,12 +133,14 @@ def get_overlapping_trends(keyword, start_date, end_date, days_delta):
     while not first_half:
         # get first half-period result
         first_plus_half = start_date + timedelta(days=0.5*days_delta-1)
-        print(f'Trying first {0.5*days_delta} days of trends for \'{keyword}\'')
-        trends = get_trends(keyword, start_date, first_plus_half)
+        if verbose == True:
+            print(f'Trying first {int(0.5*days_delta)} days of trends for \'{keyword}\'')
+        trends = get_trends(keyword, start_date, first_plus_half, verbose)
 
         # if no trends were found, series will be empty.
         if trends.empty:
-            print('None found')
+            if verbose == True:
+                print('None found')
             # shift start_date on half a period for next try
             start_date += timedelta(days=0.5*days_delta)
 
@@ -136,7 +148,8 @@ def get_overlapping_trends(keyword, start_date, end_date, days_delta):
             if start_date > end_date:
                 return [trends, trends]
         else:
-            print('Downloaded successfully')
+            if verbose == True:
+                print('Downloaded successfully')
             trends_list.append(trends)
             first_half = True
 
@@ -148,8 +161,8 @@ def get_overlapping_trends(keyword, start_date, end_date, days_delta):
         if start_date not in start_dates:
             start_dates.append(start_date)
 
-            start_date_plus = start_date + timedelta(days=days_delta-1)
-            trends = get_trends(keyword, start_date, start_date_plus)
+            start_date_plus = start_date + timedelta(days=min(days_delta-1, (end_date - start_date).days))
+            trends = get_trends(keyword, start_date, start_date_plus, verbose)
 
             # if no trends found, return a pair of empty series
             if trends.empty:
@@ -158,7 +171,11 @@ def get_overlapping_trends(keyword, start_date, end_date, days_delta):
             else:
                 trends_list.append(trends)
 
-            next_date = start_date + timedelta(days=0.5*days_delta)
+            if start_date_plus == end_date:
+                next_date = end_date
+            else:
+                next_date = start_date + timedelta(days=0.5*days_delta)
+
         else:
             break
 
@@ -212,6 +229,9 @@ def ext_scale(to_scale, scale_by):
                 2021-07-12    111.842105
                 2021-07-13    130.263158
 
+    Raises:
+        ValueError: if overlapping part of to_scale with scale_by has range 0, which would lead to divide by zero
+
     """
 
     # find intersections
@@ -220,6 +240,9 @@ def ext_scale(to_scale, scale_by):
     inter_sb = scale_by.loc[overlap]
 
     factor = inter_sb.max() - inter_sb.min()
+
+    if inter_ts.max() - inter_ts.min() == 0:
+        raise ValueError('unable to scale: to_scale has range 0 in overlap with scale_by; this may be because of an extreme spike in trend data')
 
     scaled = factor * (to_scale - inter_ts.min()) / (inter_ts.max() - inter_ts.min())
     scaled += inter_sb.min()
@@ -243,3 +266,20 @@ def rescale_overlaps(trends_list):
         trends_list_scaled.append(es)
 
     return trends_list_scaled
+
+def rescaled_longtrend(trends_list_scaled):
+    longtrend = pd.DataFrame(pd.concat(trends_list_scaled)).reset_index().drop_duplicates(subset='date').set_index('date').squeeze()
+    rescaled = 100 * (longtrend - longtrend.min()) / (longtrend.max() - longtrend.min())
+    return rescaled
+
+class LongTrend():
+    def __init__(self, keyword, start_date, end_date):
+        self.keyword = keyword
+        self.start_date = start_date
+        self.end_date = end_date
+
+    def build(self, **kwargs):
+        ot = get_overlapping_trends(self.keyword, self.start_date, self.end_date, **kwargs)
+        ro = rescale_overlaps(ot)
+        rl = rescaled_longtrend(ro)
+        return rl

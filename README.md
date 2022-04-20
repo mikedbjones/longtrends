@@ -14,72 +14,53 @@ A package to download long-term Google Trends.
 
 Requires [pytrends](https://pypi.org/project/pytrends/), installed automatically with `pip`.
 
-## Usage
+## Quick Start
 
 ```
-from longtrends import rescale_overlaps, get_overlapping_trends
+from longtrends import LongTrend
 from datetime import datetime
 
-# Get overlapping trends
-olympics = get_overlapping_trends(
-                                keyword='olympics',
-                                start_date=datetime(2021, 7, 4),
-                                end_date=datetime(2021, 8, 29),
-                                days_delta=10)
+keyword = 'suncream'
 
-# Rescale overlaps
-olympics_rescaled = rescale_overlaps(olympics)
+# Create LongTrend object
+longtrend = LongTrend(
+                      keyword=keyword,
+                      start_date=datetime(2018, 1, 1),
+                      end_date=datetime(2022, 3, 31))        # use verbose=True for print output
+# Build long-term trends
+lt_built = longtrend.build()
 
-# Optionally, plot the two sets of trends for comparison
-import matplotlib.pyplot as plt
+# Plot
+lt_built.plot(title=f"Google Trends: {longtrend.keyword}", figsize=(15, 3))
+```
+![suncream.png](/assets/images/suncream.png)
+## Under the hood
+First, longtrends downloads overlapping trends.
+```
+from longtrends import rescale_overlaps, get_overlapping_trends, rescaled_longtrend
 import pandas as pd
 
-def trends_plot(trends_list):
+overlapping = get_overlapping_trends(
+                                keyword=keyword,
+                                start_date=datetime(2018, 1, 1),
+                                end_date=datetime(2022, 3, 31),
+                                verbose=True)
 
-    """
-    Args:
-        trends_list (list): list of Series of trends, with scores as columns and dates as index
-
-            each Series eg:
-
-                date
-                2016-04-10      44
-                2016-04-17      44
-                2016-04-24     100
-
-    Returns:
-        NoneType
-
-    """
-
-    # concat the trends together
-    df = pd.concat(trends_list, axis=1)
-
-    df.columns = [f'{df.columns[i]}_{i}' for i in range(df.shape[1])]
-    df.plot.line(figsize=(15, 4))
-    plt.ylabel('Score')
-    plt.title('Google Trends over different time periods')
-    plt.legend()
-    plt.show()
-
-# Plot overlapping trends
-trends_plot(olympics)
-
-# Plot rescaled trends
-trends_plot(olympics_rescaled)
+pd.concat(overlapping, axis=1).plot(figsize=(15,3), legend=False)
 ```
-
-## Images
-
-Plot outputs from the above usage example:
-
-1. Trends for 'olympics', before rescaling between overlaps:
-
-![olympics_overlapping.png](/assets/images/olympics_overlapping.png)
-
-2. Trends after rescaling
-
-![olympics_rescaled.png](/assets/images/olympics_rescaled.png)
+![overlapping_trends.png](/assets/images/overlapping_trends.png)
+Next, i+1th overlap is rescaled to ith overlap.
+```
+rescaled = rescale_overlaps(overlapping)
+pd.concat(rescaled, axis=1).plot(figsize=(15,3), legend=False)
+```
+![overlaps_rescaled.png](/assets/images/overlaps_rescaled.png)
+Finally, a single long-term trend is picked.
+```
+rescaled = rescaled_longtrend(rescaled)
+rescaled.plot(figsize=(15,3), title='Rescaled long-term trend')
+```
+![rescaled_longtrend.png](/assets/images/rescaled_longtrend.png)
 
 ## Disclaimer
 
